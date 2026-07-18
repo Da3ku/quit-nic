@@ -269,19 +269,52 @@
   .btn:active { background: #1c2927; }
   .btn.armed { color: #E0A44C; border-color: #E0A44C; }
 
-  .cleared-note {
+  .stamp {
     width: 100%;
-    margin-top: 22px;
     text-align: center;
-    font-size: 14px;
-    color: var(--accent);
-    font-weight: 600;
-    display: none;
+    margin-top: 18px;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--muted-dim);
+    text-transform: uppercase;
   }
+
+  .cele {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 34px;
+    background: rgba(14, 21, 23, 0.94);
+  }
+  #confetti { position: fixed; inset: 0; z-index: 59; pointer-events: none; }
+  .cele-card { position: relative; z-index: 61; max-width: 350px; text-align: center; }
+  .cele-eyebrow {
+    font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; margin-bottom: 14px;
+  }
+  .cele-big {
+    font-family: ui-rounded, "SF Pro Rounded", ui-sans-serif, system-ui, sans-serif;
+    font-size: 46px; font-weight: 700; color: var(--text);
+    letter-spacing: -0.02em; line-height: 1.05;
+  }
+  .cele-sub {
+    font-size: 15.5px; color: var(--muted); line-height: 1.55; margin-top: 18px;
+  }
+  .cele-sub b { color: var(--text); font-weight: 600; }
+  .cele-btn {
+    margin-top: 28px; width: 100%; padding: 15px;
+    border-radius: 13px; border: 1px solid var(--accent);
+    background: transparent; color: var(--accent);
+    font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .cele-btn:active { background: rgba(79, 209, 197, 0.12); }
 </style>
 </head>
 <body>
-  <div class="eyebrow"><span class="dot"></span>Nicotine clearing</div>
+  <div class="eyebrow"><span class="dot"></span><span id="eyebrowText">Nicotine clearing</span></div>
 
   <div class="ring-wrap">
     <svg class="ring" viewBox="0 0 280 280">
@@ -291,11 +324,11 @@
     </svg>
     <div class="ring-center">
       <div class="pct" id="pct">0<span class="sign">%</span></div>
-      <div class="pct-label">of 72&nbsp;h cleared</div>
+      <div class="pct-label" id="pctLabel">of 72&nbsp;h cleared</div>
     </div>
   </div>
 
-  <div class="times">
+  <div class="times" id="times1">
     <div class="time-cell">
       <div class="time-val" id="elapsed">—</div>
       <div class="time-key">Elapsed</div>
@@ -303,6 +336,17 @@
     <div class="time-cell">
       <div class="time-val" id="remaining">—</div>
       <div class="time-key">Remaining</div>
+    </div>
+  </div>
+
+  <div class="times" id="times2" style="display:none">
+    <div class="time-cell">
+      <div class="time-val" id="freeVal">—</div>
+      <div class="time-key">Free</div>
+    </div>
+    <div class="time-cell">
+      <div class="time-val" id="nextVal">—</div>
+      <div class="time-key" id="nextKey">Next</div>
     </div>
   </div>
 
@@ -315,23 +359,38 @@
     <input type="datetime-local" id="picker" class="since-picker" aria-label="Set your last puff time">
   </div>
 
-  <div class="cleared-note" id="clearedNote">✦ Nicotine fully cleared. Nice work.</div>
-
-  <div class="timeline">
+  <div class="timeline" id="timeline1">
     <div class="timeline-title">What's happening inside</div>
-    <div id="miles"></div>
+    <div id="miles1"></div>
+  </div>
+
+  <div class="timeline" id="timeline2" style="display:none">
+    <div class="timeline-title">The long game</div>
+    <div id="miles2"></div>
   </div>
 
   <div class="controls">
     <button class="btn" id="resetBtn">Reset to now</button>
   </div>
 
-  <div style="width:100%;text-align:center;margin-top:18px;font-size:10px;letter-spacing:0.2em;color:var(--muted-dim);text-transform:uppercase;">v6</div>
+  <div class="stamp">v7</div>
+
+  <canvas id="confetti"></canvas>
+  <div class="cele" id="cele">
+    <div class="cele-card">
+      <div class="cele-eyebrow">72 hours</div>
+      <div class="cele-big">Nicotine,<br>cleared.</div>
+      <div class="cele-sub">Your body is officially free of it. But you already know the truth — <b>the physical part was never the hard part.</b> What's ahead is habit, triggers, and the quiet moments. No countdown can measure that. So the app grows with you now — every day free, counted, all the way to a year.<br><br><b>This is where it actually starts. Go get it.</b></div>
+      <button class="cele-btn" id="celeBtn">I'm ready</button>
+    </div>
+  </div>
 
 <script>
   const WINDOW_H = 72;
   const WINDOW_MS = WINDOW_H * 3600 * 1000;
+  const DAY_MS = 86400000;
   const KEY = "nic_clearing_start_v1";
+  const CELEB_KEY = "nic_celebrated_v1";
 
   const R = 120;
   const CIRC = 2 * Math.PI * R;
@@ -349,6 +408,17 @@
     { h: 72,  label: "72 h",   text: "Nicotine and its main byproduct, cotinine, are largely cleared. Airways relax, breathing feels easier, and the hardest part of physical withdrawal is behind you. Energy climbs from here." },
   ];
 
+  const LONGTERM = [
+    { d: 4,   label: "Day 4",    text: "Withdrawal symptoms ease off. Appetite, mood and sleep start leveling back out." },
+    { d: 7,   label: "1 week",   text: "Focus sharpens and taste and smell keep improving. Passing week one is huge — this is exactly where most people slip, and you didn't." },
+    { d: 14,  label: "2 weeks",  text: "Circulation and lung function improve. Moving and training start to feel easier." },
+    { d: 21,  label: "3 weeks",  text: "Cravings turn occasional instead of constant as your brain's nicotine receptors wind down toward normal." },
+    { d: 30,  label: "1 month",  text: "The tiny hairs (cilia) in your lungs regrow — less coughing, easier breathing. Skin looks brighter too." },
+    { d: 90,  label: "3 months", text: "Lung function is measurably up and circulation is strong. The old habit loop is largely rewired." },
+    { d: 270, label: "9 months", text: "Cilia have mostly recovered; energy and breathing are noticeably better." },
+    { d: 365, label: "1 year",   text: "Your heart-disease risk has dropped to roughly half. One full year free — that's the whole thing." },
+  ];
+
   const prog = document.getElementById("prog");
   const dot = document.getElementById("dot");
   prog.style.strokeDasharray = CIRC;
@@ -359,8 +429,11 @@
     const c = AMBER.map((a, i) => Math.round(a + (TEAL[i] - a) * t));
     return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
   }
+  const TEAL_STR = mix(1);
 
   let startMs = null;
+  let celebrated = false;
+  try { celebrated = localStorage.getItem(CELEB_KEY) === "1"; } catch (e) {}
 
   function getStart() {
     try {
@@ -386,13 +459,22 @@
     if (h === 0) return `${m}m`;
     return `${h}h ${String(m).padStart(2, "0")}m`;
   }
+  function fmtDaysHours(ms) {
+    const d = Math.floor(ms / DAY_MS);
+    const h = Math.floor((ms % DAY_MS) / 3600000);
+    return `${d}d ${String(h).padStart(2, "0")}h`;
+  }
+  function fmtUntil(remDays) {
+    if (remDays >= 1) return `${Math.ceil(remDays)}d`;
+    const h = Math.ceil(remDays * 24);
+    return `${Math.max(1, h)}h`;
+  }
 
   function fmtDate(ms) {
     return new Date(ms).toLocaleString(undefined, {
       weekday: "short", hour: "numeric", minute: "2-digit"
     });
   }
-
   function toPickerValue(ms) {
     const off = new Date(ms).getTimezoneOffset() * 60000;
     return new Date(ms - off).toISOString().slice(0, 16);
@@ -401,40 +483,31 @@
     if (startMs != null) picker.value = toPickerValue(startMs);
   }
 
-  const milesEl = document.getElementById("miles");
-  MILESTONES.forEach(m => {
-    const label = m.label || (m.h < 1 ? `${Math.round(m.h * 60)} min` : `${m.h} h`);
-    const el = document.createElement("div");
-    el.className = "mile";
-    el.innerHTML = `
-      <div class="mile-rail">
-        <div class="mile-node"></div>
+  function buildTimeline(list, container, hoursKey) {
+    list.forEach(m => {
+      const el = document.createElement("div");
+      el.className = "mile";
+      el.innerHTML = `
+        <div class="mile-rail">
+          <div class="mile-node"></div>
+        </div>
         <div class="mile-line"></div>
-      </div>
-      <div class="mile-body">
-        <div class="mile-when">${label}</div>
-        <div class="mile-text">${m.text}</div>
-      </div>`;
-    milesEl.appendChild(el);
-    m._el = el;
-  });
+        <div class="mile-body">
+          <div class="mile-when">${m.label}</div>
+          <div class="mile-text">${m.text}</div>
+        </div>`;
+      container.appendChild(el);
+      m._el = el;
+    });
+  }
+  buildTimeline(MILESTONES, document.getElementById("miles1"));
+  buildTimeline(LONGTERM, document.getElementById("miles2"));
 
-  function render() {
-    const start = startMs;
-    if (start == null) return;
-    const now = Date.now();
-    const elapsedMs = now - start;
-    let pct = (elapsedMs / WINDOW_MS) * 100;
-    pct = Math.max(0, Math.min(100, pct));
-
-    const t = pct / 100;
-    const color = mix(t);
-
-    prog.style.strokeDashoffset = CIRC * (1 - t);
+  function paintRing(frac, color) {
     prog.style.stroke = color;
-
-    if (t > 0.008 && t < 1) {
-      const ang = 2 * Math.PI * t;
+    prog.style.strokeDashoffset = CIRC * (1 - frac);
+    if (frac > 0.008 && frac < 1) {
+      const ang = 2 * Math.PI * frac;
       dot.setAttribute("cx", (140 + R * Math.cos(ang)).toFixed(2));
       dot.setAttribute("cy", (140 + R * Math.sin(ang)).toFixed(2));
       dot.setAttribute("fill", color);
@@ -442,30 +515,91 @@
     } else {
       dot.style.display = "none";
     }
+  }
 
-    const pctEl = document.getElementById("pct");
-    pctEl.innerHTML = `${pct.toFixed(1)}<span class="sign">%</span>`;
-    pctEl.style.color = color;
-
-    document.getElementById("elapsed").textContent = fmtDuration(elapsedMs);
-    document.getElementById("remaining").textContent =
-      elapsedMs >= WINDOW_MS ? "Done" : fmtDuration(WINDOW_MS - elapsedMs);
-
-    document.getElementById("sinceVal").textContent = fmtDate(start);
-    document.getElementById("clearedNote").style.display =
-      elapsedMs >= WINDOW_MS ? "block" : "none";
-
-    const elapsedH = elapsedMs / 3600000;
+  function markMilestones(list, value) {
     let nextAssigned = false;
-    MILESTONES.forEach(m => {
+    list.forEach(m => {
       m._el.classList.remove("passed", "next");
-      if (elapsedH >= m.h) {
+      if (value >= m._threshold) {
         m._el.classList.add("passed");
       } else if (!nextAssigned) {
         m._el.classList.add("next");
         nextAssigned = true;
       }
     });
+  }
+  MILESTONES.forEach(m => m._threshold = m.h);
+  LONGTERM.forEach(m => m._threshold = m.d);
+
+  const eyebrowText = document.getElementById("eyebrowText");
+  const pctEl = document.getElementById("pct");
+  const pctLabel = document.getElementById("pctLabel");
+  const t1 = document.getElementById("times1");
+  const t2 = document.getElementById("times2");
+  const tl1 = document.getElementById("timeline1");
+  const tl2 = document.getElementById("timeline2");
+
+  function render() {
+    if (startMs == null) return;
+    const now = Date.now();
+    const elapsedMs = now - startMs;
+    document.getElementById("sinceVal").textContent = fmtDate(startMs);
+
+    if (elapsedMs < WINDOW_MS) {
+      eyebrowText.textContent = "Nicotine clearing";
+      t1.style.display = "flex"; t2.style.display = "none";
+      tl1.style.display = "flex"; tl2.style.display = "none";
+
+      let pct = Math.max(0, Math.min(100, (elapsedMs / WINDOW_MS) * 100));
+      const t = pct / 100;
+      const color = mix(t);
+      paintRing(t, color);
+      pctEl.innerHTML = `${pct.toFixed(1)}<span class="sign">%</span>`;
+      pctEl.style.color = color;
+      pctLabel.innerHTML = "of 72&nbsp;h cleared";
+
+      document.getElementById("elapsed").textContent = fmtDuration(elapsedMs);
+      document.getElementById("remaining").textContent = fmtDuration(WINDOW_MS - elapsedMs);
+
+      markMilestones(MILESTONES, elapsedMs / 3600000);
+    } else {
+      eyebrowText.textContent = "Nicotine-free";
+      t1.style.display = "none"; t2.style.display = "flex";
+      tl1.style.display = "none"; tl2.style.display = "flex";
+
+      const days = elapsedMs / DAY_MS;
+      const dayInt = Math.floor(days);
+
+      let prevD = 3, next = null;
+      for (const m of LONGTERM) {
+        if (days >= m.d) prevD = m.d;
+        else { next = m; break; }
+      }
+      const frac = next ? Math.max(0, Math.min(1, (days - prevD) / (next.d - prevD))) : 1;
+      paintRing(frac, TEAL_STR);
+
+      pctEl.textContent = String(dayInt);
+      pctEl.style.color = TEAL_STR;
+      pctLabel.textContent = dayInt === 1 ? "day free" : "days free";
+
+      document.getElementById("freeVal").textContent = fmtDaysHours(elapsedMs);
+      if (next) {
+        document.getElementById("nextVal").textContent = fmtUntil(next.d - days);
+        document.getElementById("nextKey").textContent = "to " + next.label;
+      } else {
+        document.getElementById("nextVal").textContent = "★";
+        document.getElementById("nextKey").textContent = "1 year+";
+      }
+
+      markMilestones(LONGTERM, days);
+
+      if (!celebrated) {
+        celebrated = true;
+        try { localStorage.setItem(CELEB_KEY, "1"); } catch (e) {}
+        try { celebrate(); } catch (e) {}
+      }
+    }
   }
 
   const picker = document.getElementById("picker");
@@ -480,8 +614,7 @@
   });
 
   const resetBtn = document.getElementById("resetBtn");
-  let resetArmed = false;
-  let resetTimer = null;
+  let resetArmed = false, resetTimer = null;
   resetBtn.addEventListener("click", () => {
     if (!resetArmed) {
       resetArmed = true;
@@ -500,6 +633,53 @@
       setStart(Date.now());
     }
   });
+
+  function celebrate() {
+    const overlay = document.getElementById("cele");
+    overlay.style.display = "flex";
+    const canvas = document.getElementById("confetti");
+    const ctx = canvas.getContext("2d");
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    resize();
+    window.addEventListener("resize", resize);
+    const colors = ["#4FD1C5", "#E0A44C", "#9FE1CB", "#E9F0ED"];
+    const parts = [];
+    for (let i = 0; i < 150; i++) {
+      parts.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * -canvas.height,
+        w: 5 + Math.random() * 6,
+        c: colors[i % colors.length],
+        vy: 2 + Math.random() * 3.5,
+        vx: -1.2 + Math.random() * 2.4,
+        rot: Math.random() * 6.28,
+        vr: -0.25 + Math.random() * 0.5
+      });
+    }
+    const start = performance.now();
+    let raf;
+    function frame(t) {
+      const el = t - start;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      parts.forEach(p => {
+        p.y += p.vy; p.x += p.vx; p.rot += p.vr;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(-p.w / 2, -p.w / 2, p.w, p.w * 0.55);
+        ctx.restore();
+      });
+      if (el < 6500) raf = requestAnimationFrame(frame);
+      else ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    raf = requestAnimationFrame(frame);
+    document.getElementById("celeBtn").onclick = () => {
+      overlay.style.display = "none";
+      cancelAnimationFrame(raf);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
+  }
 
   startMs = getStart();
   syncPicker();
