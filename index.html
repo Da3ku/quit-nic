@@ -80,8 +80,11 @@
   .ring-progress {
     fill: none;
     stroke-width: 14;
-    stroke-linecap: round;
+    stroke-linecap: butt;
     transition: stroke-dashoffset 0.9s cubic-bezier(.22,1,.36,1), stroke 0.9s linear;
+  }
+  .ring-dot {
+    transition: cx 0.9s cubic-bezier(.22,1,.36,1), cy 0.9s cubic-bezier(.22,1,.36,1), fill 0.9s linear;
   }
 
   .ring-center {
@@ -131,6 +134,7 @@
   }
 
   .since {
+    position: relative;
     width: 100%;
     margin-top: 20px;
     background: var(--surface);
@@ -140,7 +144,6 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    cursor: pointer;
   }
   .since-label { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; }
   .since-val {
@@ -151,7 +154,21 @@
     font-weight: 550;
   }
   .since-edit { font-size: 12.5px; color: var(--accent); font-weight: 650; }
-  #picker { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+  .since-picker {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    z-index: 2;
+  }
 
   .timeline {
     width: 100%;
@@ -176,7 +193,7 @@
   }
   .mile:last-child { padding-bottom: 0; }
   .mile-rail {
-    position: relative;
+    width: 15px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -193,7 +210,9 @@
   }
   .mile-line {
     position: absolute;
-    top: 15px; bottom: -5px;
+    top: 16px;
+    bottom: -9px;
+    left: 6.5px;
     width: 2px;
     background: var(--surface-line);
     transition: background 0.5s ease;
@@ -233,12 +252,10 @@
   .controls {
     width: 100%;
     margin-top: 30px;
-    display: flex;
-    gap: 12px;
   }
   .btn {
-    flex: 1;
-    padding: 13px;
+    width: 100%;
+    padding: 14px;
     border-radius: 13px;
     border: 1px solid var(--surface-line);
     background: var(--surface);
@@ -247,10 +264,10 @@
     font-weight: 600;
     font-family: inherit;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
   }
   .btn:active { background: #1c2927; }
-  .btn.danger { color: #E0A44C; }
+  .btn.armed { color: #E0A44C; border-color: #E0A44C; }
 
   .cleared-note {
     width: 100%;
@@ -270,6 +287,7 @@
     <svg class="ring" viewBox="0 0 280 280">
       <circle class="ring-track" cx="140" cy="140" r="120"></circle>
       <circle class="ring-progress" id="prog" cx="140" cy="140" r="120"></circle>
+      <circle class="ring-dot" id="dot" cx="260" cy="140" r="7" style="display:none"></circle>
     </svg>
     <div class="ring-center">
       <div class="pct" id="pct">0<span class="sign">%</span></div>
@@ -288,13 +306,13 @@
     </div>
   </div>
 
-  <div class="since" id="sinceRow">
+  <div class="since">
     <div>
       <div class="since-label">Last puff</div>
       <div class="since-val" id="sinceVal">—</div>
     </div>
     <div class="since-edit">Edit</div>
-    <input type="datetime-local" id="picker">
+    <input type="datetime-local" id="picker" class="since-picker" aria-label="Set your last puff time">
   </div>
 
   <div class="cleared-note" id="clearedNote">✦ Nicotine fully cleared. Nice work.</div>
@@ -305,9 +323,10 @@
   </div>
 
   <div class="controls">
-    <button class="btn" id="changeBtn">Change start time</button>
-    <button class="btn danger" id="resetBtn">Reset to now</button>
+    <button class="btn" id="resetBtn">Reset to now</button>
   </div>
+
+  <div style="width:100%;text-align:center;margin-top:18px;font-size:10px;letter-spacing:0.2em;color:var(--muted-dim);text-transform:uppercase;">v6</div>
 
 <script>
   const WINDOW_H = 72;
@@ -331,6 +350,7 @@
   ];
 
   const prog = document.getElementById("prog");
+  const dot = document.getElementById("dot");
   prog.style.strokeDasharray = CIRC;
 
   const AMBER = [224, 164, 76];
@@ -354,6 +374,7 @@
   function setStart(ms) {
     startMs = ms;
     try { localStorage.setItem(KEY, String(ms)); } catch (e) {}
+    syncPicker();
     render();
   }
 
@@ -375,6 +396,9 @@
   function toPickerValue(ms) {
     const off = new Date(ms).getTimezoneOffset() * 60000;
     return new Date(ms - off).toISOString().slice(0, 16);
+  }
+  function syncPicker() {
+    if (startMs != null) picker.value = toPickerValue(startMs);
   }
 
   const milesEl = document.getElementById("miles");
@@ -409,6 +433,16 @@
     prog.style.strokeDashoffset = CIRC * (1 - t);
     prog.style.stroke = color;
 
+    if (t > 0.008 && t < 1) {
+      const ang = 2 * Math.PI * t;
+      dot.setAttribute("cx", (140 + R * Math.cos(ang)).toFixed(2));
+      dot.setAttribute("cy", (140 + R * Math.sin(ang)).toFixed(2));
+      dot.setAttribute("fill", color);
+      dot.style.display = "";
+    } else {
+      dot.style.display = "none";
+    }
+
     const pctEl = document.getElementById("pct");
     pctEl.innerHTML = `${pct.toFixed(1)}<span class="sign">%</span>`;
     pctEl.style.color = color;
@@ -435,24 +469,40 @@
   }
 
   const picker = document.getElementById("picker");
-  function openPicker() {
-    if (startMs == null) return;
-    picker.value = toPickerValue(startMs);
-    picker.showPicker ? picker.showPicker() : picker.click();
-  }
-  document.getElementById("sinceRow").addEventListener("click", openPicker);
-  document.getElementById("changeBtn").addEventListener("click", openPicker);
+  picker.addEventListener("click", () => {
+    if (picker.showPicker) { try { picker.showPicker(); } catch (e) {} }
+  });
   picker.addEventListener("change", () => {
     if (picker.value) {
       const ms = new Date(picker.value).getTime();
       if (!isNaN(ms)) setStart(ms);
     }
   });
-  document.getElementById("resetBtn").addEventListener("click", () => {
-    if (confirm("Restart the 72-hour clock from right now?")) setStart(Date.now());
+
+  const resetBtn = document.getElementById("resetBtn");
+  let resetArmed = false;
+  let resetTimer = null;
+  resetBtn.addEventListener("click", () => {
+    if (!resetArmed) {
+      resetArmed = true;
+      resetBtn.textContent = "Tap again to reset";
+      resetBtn.classList.add("armed");
+      resetTimer = setTimeout(() => {
+        resetArmed = false;
+        resetBtn.textContent = "Reset to now";
+        resetBtn.classList.remove("armed");
+      }, 3000);
+    } else {
+      clearTimeout(resetTimer);
+      resetArmed = false;
+      resetBtn.textContent = "Reset to now";
+      resetBtn.classList.remove("armed");
+      setStart(Date.now());
+    }
   });
 
   startMs = getStart();
+  syncPicker();
   render();
   setInterval(render, 1000);
 </script>
