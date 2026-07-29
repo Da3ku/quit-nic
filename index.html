@@ -7,6 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Clearing">
 <meta name="theme-color" content="#0E1517">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Clearing</title>
 <style>
   :root {
@@ -373,7 +376,7 @@
     <button class="btn" id="resetBtn">Reset to now</button>
   </div>
 
-  <div class="stamp">v7</div>
+  <div class="stamp">v8</div>
 
   <canvas id="confetti"></canvas>
   <div class="cele" id="cele">
@@ -685,6 +688,12 @@
   syncPicker();
   render();
   setInterval(render, 1000);
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
 </script>
 </body>
 </html>
